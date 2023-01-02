@@ -41,36 +41,119 @@ public class Promise<V> {
     }
 
     // No instance fields are defined, perhaps you should add some!
+    private Status status;
+    private ValueOrError<V> result;
+    private PromiseExecutor<V> executor;
+    private Thread thread;
     
     public Promise(PromiseExecutor<V> executor) {
-        // Constructors that throw exceptions is a bad thing
-        throw new UnsupportedOperationException("IMPLEMENT ME");        
+        // Initialize Promise fields
+        this.status = Status.PENDING;
+        this.result = null;
+        this.executor = executor;
+        // Create a thread that calls the executor's execute function and saves the resolution or rejection status accordingely on the Promise object.
+        this.thread = new Thread(() -> executor.execute((value) -> {
+            if (status.equals(Status.PENDING)) {
+                status = Status.FULLFILLED;
+                result = ValueOrError.Value.of(value);
+            }
+        }, (error) -> {
+            if (status.equals(Status.PENDING)) {
+                status = Status.REJECTED;
+                result = ValueOrError.Error.of(error);
+            }
+        }));
+        // Start the thread
+        this.thread.start();
     }
 
     public <T> Promise<ValueOrError<T>> then(Function<V, T> onResolve, Consumer<Throwable> onReject) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Wait for executor Thread to finish
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex.getMessage());
+            }
+            // Act based on the promise status returned by the executor
+            if (status.equals(Status.FULLFILLED)) {
+                resolve.accept(ValueOrError.Value.of(onResolve.apply(result.value())));
+            } else if (status.equals(Status.REJECTED)) {
+                onReject.accept(result.error());
+                reject.accept(result.error());
+            } else {
+                // Error: Neither resolve.accept() nor reject.accept() called by PromiseExecutor so return a new promise with the error below:
+                Throwable noResolveOrRejectCalled = new RuntimeException("Promise Error: Neither resolve.accept() nor reject.accept() called by PromiseExecutor!");
+                onReject.accept(noResolveOrRejectCalled);
+                reject.accept(noResolveOrRejectCalled);
+            }
+        });
     }
 
     public <T> Promise<T> then(Function<V, T> onResolve) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");                
+        return new Promise<>((resolve, reject) -> {
+            // Wait for executor Thread to finish
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex.getMessage());
+            }
+            // If the status is FULLFILLED, return a new promise with the value. Otherwise, return one with nothing.
+            if (status.equals(Status.FULLFILLED)) {
+                resolve.accept(onResolve.apply(result.value()));
+            } else {
+                resolve.accept(null);
+            }
+        });
     }
 
     // catch is a reserved word in Java.
     public Promise<Throwable> catchError(Consumer<Throwable> onReject) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Wait for executor Thread to finish
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex.getMessage());
+            }
+            // If the status is REJECTED, return a new promise with the error. Otherwise, return one with nothing.
+            if (status.equals(Status.REJECTED)) {
+                onReject.accept(result.error());
+                reject.accept(result.error());
+            } else {
+                reject.accept(null);
+            }
+        });
     }
 
     // finally is a reserved word in Java.
     public <T> Promise<ValueOrError<T>> andFinally(Consumer<ValueOrError<T>> onSettle) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Wait for executor Thread to finish
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex.getMessage());
+            }
+            // Call onSettle
+            if (status.equals(Status.FULLFILLED)) {
+                onSettle.accept(ValueOrError.Value.of((T)result.value()));
+            } else if (status.equals(Status.REJECTED)) {
+                onSettle.accept(ValueOrError.Error.of(result.error()));
+            } else {
+                // Error: Neither resolve.accept() nor reject.accept() called by PromiseExecutor so return a new promise with the error below:
+                Throwable noResolveOrRejectCalled = new RuntimeException("Promise Error: Neither resolve.accept() nor reject.accept() called by PromiseExecutor!");
+                onSettle.accept(ValueOrError.Error.of(noResolveOrRejectCalled));
+            }
+        });
     }
 
     public static <T> Promise<T> resolve(T value) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> resolve.accept(value));
     }
 
     public static Promise<Throwable> reject(Throwable error) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> reject.accept(error));
     }
 
     public static <T> Promise<T> race(Iterable<Promise<?>> promises) {

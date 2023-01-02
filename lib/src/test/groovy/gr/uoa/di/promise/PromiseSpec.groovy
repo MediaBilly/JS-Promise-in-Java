@@ -44,7 +44,7 @@ class PromiseSpec extends Specification {
         new Promise( (Consumer<String> resolve, Consumer<Throwable> reject) -> {
             resolve.accept(done)
             reject.accept(error)
-        }).finally( (valueOrError) -> {
+        }).andFinally ( (valueOrError) -> {
             conditions.evaluate { 
                 assert valueOrError.value() == done  
                 assert valueOrError.error() == null
@@ -64,7 +64,7 @@ class PromiseSpec extends Specification {
         new Promise( (Consumer<String> resolve, Consumer<Throwable> reject) -> {
             reject.accept(error)
             resolve.accept(done)            
-        }).finally( (valueOrError) -> {
+        }).andFinally ( (valueOrError) -> {
             conditions.evaluate { 
                 assert valueOrError.value() == null  
                 assert valueOrError.error() == error
