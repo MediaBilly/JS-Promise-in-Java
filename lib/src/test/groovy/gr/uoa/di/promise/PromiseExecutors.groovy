@@ -5,23 +5,18 @@ import java.util.function.Consumer
 class PromiseExecutors {
 
     static PromiseExecutor<String> delayedResolve(String value, int delayMillis) {
-        return new DelayedValue<String>(value, delayMillis)
+        return new DelayedValue<String>(value: value, delayMillis: delayMillis)
     }
 
     static PromiseExecutor<Void> delayedReject(Throwable error, int delayMillis) {
-        return new DelayedError(error, delayMillis)
+        return new DelayedError(error:error, delayMillis: delayMillis)
     }
 
 
-    private class DelayedValue<V> implements PromiseExecutor<V> {
+    private static class DelayedValue<V> implements PromiseExecutor<V> {
         
         V value
         int delayMillis
-
-        DelayedValue(V value, int delayMillis) {
-            this.value = value
-            this.delayMillis = delayMillis
-        }
 
         void execute(Consumer<V> resolve, Consumer<Throwable> reject) {
             new Thread( () -> {
@@ -33,19 +28,14 @@ class PromiseExecutors {
                     // will never occur
                     // if it occurs, the promise will remain PENDING forever
                 }
-            })
+            }).start()
         }
     }
 
-    private class DelayedError<V> implements PromiseExecutor<V> {
+    private static class DelayedError<V> implements PromiseExecutor<V> {
         
         Throwable error
         int delayMillis
-
-        DelayedError(Throwable error, int delayMillis) {
-            this.error = error
-            this.delayMillis = delayMillis
-        }
 
         void execute(Consumer<V> resolve, Consumer<Throwable> reject) {
             new Thread( () -> {
@@ -57,7 +47,7 @@ class PromiseExecutors {
                     // will never occur
                     // if it occurs, the promise will remain PENDING forever
                 }
-            })
+            }).start()
         }
     }
 

@@ -27,7 +27,7 @@ class PromiseSpec extends Specification {
         PromiseExecutor<Void> delayedError = PromiseExecutors.delayedReject(new RuntimeException("ERROR"), 1000)
 
         when:
-        new Promise(delayedString).catchError( (err) -> {
+        new Promise(delayedError).catchError( (err) -> {
             conditions.evaluate { assert err == delayedError.error }
         })
 
