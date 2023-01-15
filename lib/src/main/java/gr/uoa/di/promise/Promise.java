@@ -2,6 +2,8 @@ package gr.uoa.di.promise;
 
 import org.apache.commons.math3.util.Pair;
 
+import java.lang.module.ResolutionException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -170,11 +172,86 @@ public class Promise<V> {
     }
 
     public static Promise<ValueOrError<?>> race(List<Promise<?>> promises) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Just register the appropriate callbacks for all the given promises
+            for (Promise<?> promise : promises) {
+                promise.then((result) -> {
+                    resolve.accept(ValueOrError.Value.of(result));
+                    return result;
+                }, reject);
+            }
+        });
+    }
+
+    // Helper class that polls for a given amount of promises to either resolve or reject and keep their results.
+    // It works using a producer-consumer like model.
+    private static class PromisePoller {
+        // Amount of promises to wait for (given by the user)
+        private int numPromises;
+
+        // A list that keeps the results of the promises together with the corresponding index of the iterable provided in all and allSettled methods.
+        private List<Pair<Integer, ValueOrError<?>>> results;
+
+        public PromisePoller(int numPromises) {
+            this.numPromises = numPromises;
+            this.results = new ArrayList<>();
+        }
+
+        // Adds result of promise
+        public synchronized void addResult (int index, ValueOrError<?> result) {
+            // Not enough space
+            if (results.size() > numPromises) {
+                return;
+            }
+            results.add(new Pair<>(index, result));
+            notifyAll();
+        }
+
+        // Waits and returns results of all promises
+        public synchronized List<Pair<Integer, ValueOrError<?>>> pollResults() {
+            while (results.size() < numPromises) {
+                try {
+                    wait();
+                } catch (InterruptedException ignored) {
+
+                }
+            }
+            notifyAll();
+            return results;
+        }
     }
 
     public static Promise<?> any(List<Promise<?>> promises) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Reject if empty iterable was given
+            if (promises.size() == 0) {
+                reject.accept(new ResolutionException("No promises given"));
+                return;
+            }
+            // Create a poller to poll all the results later
+            PromisePoller poller = new PromisePoller(promises.size());
+            // Register the appropriate callbacks for all the given promises
+            for (Promise<?> promise : promises) {
+                promise.then((result) -> {
+                    resolve.accept(result);
+                    poller.addResult(0, ValueOrError.Value.of(result));
+                    return result;
+                }, (error) -> poller.addResult(0, ValueOrError.Error.of(error)));
+            }
+            // Poll for results on different thread (in order not to block execution of calling thread) and asynchronously reject if all promises were rejected
+            new Thread(() -> {
+                List<Pair<Integer, ValueOrError<?>>> results = poller.pollResults();
+                boolean allRejected = true;
+                for (Pair<Integer, ValueOrError<?>> result : results) {
+                    if (!result.getSecond().hasError()) {
+                        allRejected = false;
+                    }
+                }
+                if (allRejected) {
+                    reject.accept(new ResolutionException("All promises were rejected"));
+                }
+            }).start();
+        });
     }
 
     public static Promise<List<?>> all(List<Promise<?>> promises) {
