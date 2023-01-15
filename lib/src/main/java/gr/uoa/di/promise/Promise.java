@@ -2,6 +2,7 @@ package gr.uoa.di.promise;
 
 import org.apache.commons.math3.util.Pair;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -38,7 +39,7 @@ public class Promise<V> {
 
     public static enum Status {
         PENDING,
-        FULLFILLED,
+        FULFILLED,
         REJECTED
     }
 
@@ -53,7 +54,7 @@ public class Promise<V> {
 
         public synchronized void resolve(V value) {
             if (status.equals(Status.PENDING)) {
-                status = Status.FULLFILLED;
+                status = Status.FULFILLED;
                 result = ValueOrError.Value.of(value);
             }
             notifyAll();
@@ -90,7 +91,7 @@ public class Promise<V> {
         executor.execute((value) -> state.resolve(value), (error) -> state.reject(error));
     }
 
-    public <T> Promise<ValueOrError<T>> then(Function<V, T> onResolve, Consumer<Throwable> onReject) {
+    public <T> Promise<T> then(Function<V, T> onResolve, Consumer<Throwable> onReject) {
         return new Promise<>((resolve, reject) -> {
             new Thread(() -> {
                 // Wait for result
@@ -98,8 +99,8 @@ public class Promise<V> {
                 Status status = finalState.getFirst();
                 ValueOrError<V> result = finalState.getSecond();
                 // Act based on the promise status returned by the executor
-                if (status.equals(Status.FULLFILLED)) {
-                    resolve.accept(ValueOrError.Value.of(onResolve.apply(result.value())));
+                if (status.equals(Status.FULFILLED)) {
+                    resolve.accept(onResolve.apply(result.value()));
                 } else if (status.equals(Status.REJECTED)) {
                     onReject.accept(result.error());
                     reject.accept(result.error());
@@ -116,7 +117,7 @@ public class Promise<V> {
                 Status status = finalState.getFirst();
                 ValueOrError<V> result = finalState.getSecond();
                 // If the status is FULLFILLED, return a new promise with the value. Otherwise, return one with nothing.
-                if (status.equals(Status.FULLFILLED)) {
+                if (status.equals(Status.FULFILLED)) {
                     resolve.accept(onResolve.apply(result.value()));
                 }
             }).start();
@@ -124,7 +125,7 @@ public class Promise<V> {
     }
 
     // catch is a reserved word in Java.
-    public Promise<Throwable> catchError(Consumer<Throwable> onReject) {
+    public Promise<?> catchError(Consumer<Throwable> onReject) {
         return new Promise<>((resolve, reject) -> {
             new Thread(() -> {
                 // Wait for result
@@ -143,7 +144,7 @@ public class Promise<V> {
     }
 
     // finally is a reserved word in Java.
-    public <T> Promise<ValueOrError<T>> andFinally(Consumer<ValueOrError<T>> onSettle) {
+    public Promise<V> andFinally(Consumer<ValueOrError<V>> onSettle) {
         return new Promise<>((resolve, reject) -> {
             new Thread(() -> {
                 // Wait for result
@@ -151,8 +152,8 @@ public class Promise<V> {
                 Status status = finalState.getFirst();
                 ValueOrError<V> result = finalState.getSecond();
                 // Call onSettle
-                if (status.equals(Status.FULLFILLED)) {
-                    onSettle.accept(ValueOrError.Value.of((T)result.value()));
+                if (status.equals(Status.FULFILLED)) {
+                    onSettle.accept(ValueOrError.Value.of(result.value()));
                 } else if (status.equals(Status.REJECTED)) {
                     onSettle.accept(ValueOrError.Error.of(result.error()));
                 }
@@ -164,23 +165,23 @@ public class Promise<V> {
         return new Promise<>((resolve, reject) -> resolve.accept(value));
     }
 
-    public static Promise<Throwable> reject(Throwable error) {
+    public static Promise<Void> reject(Throwable error) {
         return new Promise<>((resolve, reject) -> reject.accept(error));
     }
 
-    public static <T> Promise<T> race(Iterable<Promise<?>> promises) {
+    public static Promise<ValueOrError<?>> race(List<Promise<?>> promises) {
         throw new UnsupportedOperationException("IMPLEMENT ME");
     }
 
-    public static <T> Promise<T> any(Iterable<Promise<?>> promises) {
+    public static Promise<?> any(List<Promise<?>> promises) {
         throw new UnsupportedOperationException("IMPLEMENT ME");
     }
 
-    public static <T> Promise<T> all(Iterable<Promise<?>> promises) {
+    public static Promise<List<?>> all(List<Promise<?>> promises) {
         throw new UnsupportedOperationException("IMPLEMENT ME");
     }
 
-    public static <T> Promise<T> allSettled(Iterable<Promise<?>> promises) {
+    public static Promise<List<ValueOrError<?>>> allSettled(List<Promise<?>> promises) {
         throw new UnsupportedOperationException("IMPLEMENT ME");
     }
 
