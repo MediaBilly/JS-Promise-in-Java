@@ -4,7 +4,9 @@ import org.apache.commons.math3.util.Pair;
 
 import java.lang.module.ResolutionException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -255,7 +257,42 @@ public class Promise<V> {
     }
 
     public static Promise<List<?>> all(List<Promise<?>> promises) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Resolve if empty iterable was given
+            if (promises.size() == 0) {
+                resolve.accept(new ArrayList<>());
+                return;
+            }
+            // Create a poller to poll all the results later
+            PromisePoller poller = new PromisePoller(promises.size());
+            // Register the appropriate callbacks for all the given promises
+            for (int i=0;i < promises.size();i++) {
+                int finalI = i;
+                promises.get(i).then((result) -> {
+                    poller.addResult(finalI, ValueOrError.Value.of(result));
+                    return result;
+                }, (error) -> {
+                    reject.accept(error);
+                    poller.addResult(finalI, ValueOrError.Error.of(error));
+                });
+            }
+            // Poll for results on different thread (in order not to block execution of calling thread) and asynchronously resolve if all promises were resolved
+            new Thread(() -> {
+                List<Pair<Integer, ValueOrError<?>>> results = poller.pollResults();
+                List<Object> resultValues = new ArrayList<>(Collections.nCopies(results.size(), null));
+                boolean allResolved = true;
+                for (Pair<Integer, ValueOrError<?>> result : results) {
+                    if (result.getSecond().hasError()) {
+                        allResolved = false;
+                    } else {
+                        resultValues.set(result.getFirst(), result.getSecond().value());
+                    }
+                }
+                if (allResolved) {
+                    resolve.accept(resultValues);
+                }
+            }).start();
+        });
     }
 
     public static Promise<List<ValueOrError<?>>> allSettled(List<Promise<?>> promises) {
