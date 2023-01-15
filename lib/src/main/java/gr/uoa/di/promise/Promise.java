@@ -6,7 +6,6 @@ import java.lang.module.ResolutionException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -296,7 +295,32 @@ public class Promise<V> {
     }
 
     public static Promise<List<ValueOrError<?>>> allSettled(List<Promise<?>> promises) {
-        throw new UnsupportedOperationException("IMPLEMENT ME");
+        return new Promise<>((resolve, reject) -> {
+            // Resolve if empty iterable was given
+            if (promises.size() == 0) {
+                resolve.accept(new ArrayList<>());
+                return;
+            }
+            // Create a poller to poll all the results later
+            PromisePoller poller = new PromisePoller(promises.size());
+            // Register the appropriate callbacks for all the given promises
+            for (int i=0;i < promises.size();i++) {
+                int finalI = i;
+                promises.get(i).then((result) -> {
+                    poller.addResult(finalI, ValueOrError.Value.of(result));
+                    return result;
+                }, (error) -> poller.addResult(finalI, ValueOrError.Error.of(error)));
+            }
+            // Poll for results on different thread (in order not to block execution of calling thread) and asynchronously resolve
+            new Thread(() -> {
+                List<Pair<Integer, ValueOrError<?>>> results = poller.pollResults();
+                List<ValueOrError<?>> resultValues = new ArrayList<>(Collections.nCopies(results.size(), null));
+                for (Pair<Integer, ValueOrError<?>> result : results) {
+                    resultValues.set(result.getFirst(), result.getSecond());
+                }
+                resolve.accept(resultValues);
+            }).start();
+        });
     }
 
 }
