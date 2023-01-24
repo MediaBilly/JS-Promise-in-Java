@@ -95,73 +95,69 @@ public class Promise<V> {
     }
 
     public <T> Promise<T> then(Function<V, T> onResolve, Consumer<Throwable> onReject) {
-        return new Promise<>((resolve, reject) -> {
-            new Thread(() -> {
-                // Wait for result
-                Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
-                Status status = finalState.getFirst();
-                ValueOrError<V> result = finalState.getSecond();
-                // Act based on the promise status returned by the executor
-                if (status.equals(Status.FULFILLED)) {
-                    resolve.accept(onResolve.apply(result.value()));
-                } else if (status.equals(Status.REJECTED)) {
-                    onReject.accept(result.error());
-                    reject.accept(result.error());
-                }
-            }).start();
-        });
+        return new Promise<>((resolve, reject) -> new Thread(() -> {
+            // Wait for result
+            Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
+            Status status = finalState.getFirst();
+            ValueOrError<V> result = finalState.getSecond();
+            // Act based on the promise status returned by the executor
+            if (status.equals(Status.FULFILLED)) {
+                resolve.accept(onResolve.apply(result.value()));
+            } else if (status.equals(Status.REJECTED)) {
+                onReject.accept(result.error());
+                reject.accept(result.error());
+            }
+        }).start());
     }
 
     public <T> Promise<T> then(Function<V, T> onResolve) {
-        return new Promise<>((resolve, reject) -> {
-            new Thread(() -> {
-                // Wait for result
-                Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
-                Status status = finalState.getFirst();
-                ValueOrError<V> result = finalState.getSecond();
-                // If the status is FULLFILLED, return a new promise with the value. Otherwise, return one with nothing.
-                if (status.equals(Status.FULFILLED)) {
-                    resolve.accept(onResolve.apply(result.value()));
-                }
-            }).start();
-        });
+        return new Promise<>((resolve, reject) -> new Thread(() -> {
+            // Wait for result
+            Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
+            Status status = finalState.getFirst();
+            ValueOrError<V> result = finalState.getSecond();
+            // If the status is FULLFILLED, return a new promise with the value. Otherwise, return one with nothing.
+            if (status.equals(Status.FULFILLED)) {
+                resolve.accept(onResolve.apply(result.value()));
+            } else {
+                resolve.accept(null);
+            }
+        }).start());
     }
 
     // catch is a reserved word in Java.
     public Promise<?> catchError(Consumer<Throwable> onReject) {
-        return new Promise<>((resolve, reject) -> {
-            new Thread(() -> {
-                // Wait for result
-                Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
-                Status status = finalState.getFirst();
-                ValueOrError<V> result = finalState.getSecond();
-                // If the status is REJECTED, return a new promise with the error. Otherwise, return one with nothing.
-                if (status.equals(Status.REJECTED)) {
-                    onReject.accept(result.error());
-                    reject.accept(result.error());
-                } else {
-                    reject.accept(null);
-                }
-            }).start();
-        });
+        return new Promise<>((resolve, reject) -> new Thread(() -> {
+            // Wait for result
+            Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
+            Status status = finalState.getFirst();
+            ValueOrError<V> result = finalState.getSecond();
+            // If the status is REJECTED, return a new promise with the error. Otherwise, return one with nothing.
+            if (status.equals(Status.REJECTED)) {
+                onReject.accept(result.error());
+                reject.accept(result.error());
+            } else {
+                reject.accept(null);
+            }
+        }).start());
     }
 
     // finally is a reserved word in Java.
     public Promise<V> andFinally(Consumer<ValueOrError<V>> onSettle) {
-        return new Promise<>((resolve, reject) -> {
-            new Thread(() -> {
-                // Wait for result
-                Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
-                Status status = finalState.getFirst();
-                ValueOrError<V> result = finalState.getSecond();
-                // Call onSettle
-                if (status.equals(Status.FULFILLED)) {
-                    onSettle.accept(ValueOrError.Value.of(result.value()));
-                } else if (status.equals(Status.REJECTED)) {
-                    onSettle.accept(ValueOrError.Error.of(result.error()));
-                }
-            }).start();
-        });
+        return new Promise<>((resolve, reject) -> new Thread(() -> {
+            // Wait for result
+            Pair<Status, ValueOrError<V>> finalState = state.getFinalState();
+            Status status = finalState.getFirst();
+            ValueOrError<V> result = finalState.getSecond();
+            // Call onSettle
+            if (status.equals(Status.FULFILLED)) {
+                onSettle.accept(ValueOrError.Value.of(result.value()));
+            } else if (status.equals(Status.REJECTED)) {
+                onSettle.accept(ValueOrError.Error.of(result.error()));
+            } else {
+                onSettle.accept(null);
+            }
+        }).start());
     }
 
     public static <T> Promise<T> resolve(T value) {

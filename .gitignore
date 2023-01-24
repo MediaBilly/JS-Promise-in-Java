@@ -6,3 +6,5 @@ build
 
 # Ignore intelij configuration
 .idea
+
+*.zip
