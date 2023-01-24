@@ -1,4 +1,4 @@
-# Implementation of the Javascript Promise in Java
+# Implementation of the JavaScript Promise in Java
 
 ## About
 
